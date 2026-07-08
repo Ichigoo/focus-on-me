@@ -5,6 +5,8 @@ import { stats } from './db/stats'
 import { engine } from './timer/engine'
 import { broadcast, createWidget, getMainWindow, hideWidget, showMainWindow } from './windows'
 import { rebuildMenu } from './tray'
+import { searchLocation } from './adhan/geocode'
+import { rescheduleAdhan, testAdhan } from './adhan/scheduler'
 
 export function registerIpc(): void {
   // ----- projects -----
@@ -42,7 +44,12 @@ export function registerIpc(): void {
     const all = settings.getAll()
     broadcast('settings:changed', all)
     rebuildMenu()
+    if (key.startsWith('adhan')) rescheduleAdhan()
   })
+
+  // ----- adhan -----
+  ipcMain.handle('adhan:searchLocation', (_e, query: string) => searchLocation(query))
+  ipcMain.on('adhan:test', () => testAdhan())
 
   // ----- session control -----
   ipcMain.handle('session:start', (_e, projectId: number, methodId: number) => {

@@ -4,6 +4,7 @@ import { settings } from './db/repos'
 import { engine } from './timer/engine'
 import { registerIpc } from './ipc'
 import { createTray, setTrayTooltip } from './tray'
+import { rescheduleAdhan } from './adhan/scheduler'
 import {
   broadcast,
   closeOverlays,
@@ -32,6 +33,9 @@ if (!gotLock) {
     // apply persisted launch-on-startup preference
     const prefs = settings.getAll()
     app.setLoginItemSettings({ openAtLogin: prefs.launchOnStartup })
+
+    // ----- adhan -----
+    rescheduleAdhan()
 
     // ----- theme -----
     nativeTheme.on('updated', () => broadcast('theme:dark', nativeTheme.shouldUseDarkColors))

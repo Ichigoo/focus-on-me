@@ -29,6 +29,15 @@ export function Button({
   )
 }
 
+export function SectionCard({ title, children }: { title: string; children: ReactNode }): React.JSX.Element {
+  return (
+    <Card className="p-6">
+      <h2 className="mb-4 text-lg font-semibold">{title}</h2>
+      {children}
+    </Card>
+  )
+}
+
 export function Card({
   children,
   className = ''

@@ -89,4 +89,20 @@ writeFileSync(
   toWav(renderNotes([{ freq: 587.33, start: 0, dur: 1.2, gain: 0.8 }], 1.5)) // D5
 )
 
+// adhan: rising 4-note call — distinct longer motif to mark prayer time
+writeFileSync(
+  join(OUT, 'adhan.wav'),
+  toWav(
+    renderNotes(
+      [
+        { freq: 392.0, start: 0, dur: 1.3, gain: 0.85 }, // G4
+        { freq: 523.25, start: 0.55, dur: 1.3, gain: 0.9 }, // C5
+        { freq: 659.26, start: 1.1, dur: 1.4, gain: 0.95 }, // E5
+        { freq: 783.99, start: 1.7, dur: 1.8, gain: 1.0 } // G5
+      ],
+      3.6
+    )
+  )
+)
+
 console.log('chimes written to', OUT)

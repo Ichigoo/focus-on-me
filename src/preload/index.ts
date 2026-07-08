@@ -57,6 +57,10 @@ const api: Api = {
     onTheme: on<boolean>('theme:dark'),
     onSound: on<SoundKind>('sound:play'),
     onSettingsChanged: on<AppSettings>('settings:changed')
+  },
+  adhan: {
+    searchLocation: (query) => ipcRenderer.invoke('adhan:searchLocation', query),
+    test: () => ipcRenderer.send('adhan:test')
   }
 }
 

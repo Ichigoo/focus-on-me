@@ -1,15 +1,17 @@
 import { useEffect } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
-import { Timer, BarChart3, Settings as SettingsIcon } from 'lucide-react'
+import { Timer, BarChart3, Moon, Settings as SettingsIcon } from 'lucide-react'
 import { useTheme } from './lib/hooks'
 import { installSoundPlayer } from './lib/sounds'
 import Start from './pages/Start'
 import Dashboard from './pages/Dashboard'
+import Adhan from './pages/Adhan'
 import Settings from './pages/Settings'
 
 const navItems = [
   { to: '/', label: 'Focus', icon: Timer },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+  { to: '/adhan', label: 'Adhan', icon: Moon },
   { to: '/settings', label: 'Settings', icon: SettingsIcon }
 ]
 
@@ -44,6 +46,7 @@ export default function App(): React.JSX.Element {
         <Routes>
           <Route path="/" element={<Start />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/adhan" element={<Adhan />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

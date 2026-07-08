@@ -3,7 +3,7 @@ import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Pencil, Plus, Trash2, 
 import type { Method, PauseMessage, Project } from '@shared/types'
 import { PROJECT_COLORS } from '@shared/types'
 import { useSettings } from '../lib/hooks'
-import { Button, Card, ConfirmDialog, EmptyState, Toggle } from '../components/ui'
+import { Button, ConfirmDialog, EmptyState, SectionCard, Toggle } from '../components/ui'
 
 export default function Settings(): React.JSX.Element {
   return (
@@ -17,15 +17,6 @@ export default function Settings(): React.JSX.Element {
         <GeneralSection />
       </div>
     </div>
-  )
-}
-
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
-  return (
-    <Card className="p-6">
-      <h2 className="mb-4 text-lg font-semibold">{title}</h2>
-      {children}
-    </Card>
   )
 }
 

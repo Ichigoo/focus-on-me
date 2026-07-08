@@ -40,6 +40,12 @@ export interface AppSettings {
   launchOnStartup: boolean
   lastProjectId: number | null
   lastMethodId: number | null
+  adhanLocation: AdhanLocation | null
+  adhanMethod: AdhanMethodKey
+  adhanMadhab: AdhanMadhab
+  adhanNotificationsEnabled: boolean
+  adhanSoundEnabled: boolean
+  adhanEnabledPrayers: Record<PrayerName, boolean>
 }
 
 export type SettingKey = keyof AppSettings
@@ -91,7 +97,40 @@ export interface HistoryEntry {
   status: SessionStatus
 }
 
-export type SoundKind = 'pause-start' | 'pause-end' | 'warning'
+export type SoundKind = 'pause-start' | 'pause-end' | 'warning' | 'adhan'
+
+export interface AdhanLocation {
+  lat: number
+  lon: number
+  label: string
+}
+
+export type AdhanMethodKey =
+  | 'MuslimWorldLeague'
+  | 'Egyptian'
+  | 'Karachi'
+  | 'UmmAlQura'
+  | 'Dubai'
+  | 'MoonsightingCommittee'
+  | 'NorthAmerica'
+  | 'Kuwait'
+  | 'Qatar'
+  | 'Singapore'
+  | 'Tehran'
+  | 'Turkey'
+
+export type AdhanMadhab = 'Shafi' | 'Hanafi'
+
+export type PrayerName = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha'
+
+export interface AdhanTimes {
+  fajr: number
+  sunrise: number
+  dhuhr: number
+  asr: number
+  maghrib: number
+  isha: number
+}
 
 export interface Api {
   projects: {
@@ -142,6 +181,10 @@ export interface Api {
     onSound: (cb: (kind: SoundKind) => void) => () => void
     onSettingsChanged: (cb: (settings: AppSettings) => void) => () => void
   }
+  adhan: {
+    searchLocation: (query: string) => Promise<AdhanLocation[]>
+    test: () => void
+  }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -153,7 +196,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   widgetEnabled: true,
   launchOnStartup: false,
   lastProjectId: null,
-  lastMethodId: null
+  lastMethodId: null,
+  adhanLocation: null,
+  adhanMethod: 'MuslimWorldLeague',
+  adhanMadhab: 'Shafi',
+  adhanNotificationsEnabled: false,
+  adhanSoundEnabled: false,
+  adhanEnabledPrayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true }
 }
 
 export const PROJECT_COLORS = [

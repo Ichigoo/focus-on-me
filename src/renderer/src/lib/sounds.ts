@@ -1,12 +1,14 @@
 import pauseStartUrl from '../assets/sounds/pause-start.wav'
 import pauseEndUrl from '../assets/sounds/pause-end.wav'
 import warningUrl from '../assets/sounds/warning.wav'
+import adhanUrl from '../assets/sounds/adhan.wav'
 import type { SoundKind } from '@shared/types'
 
 const urls: Record<SoundKind, string> = {
   'pause-start': pauseStartUrl,
   'pause-end': pauseEndUrl,
-  warning: warningUrl
+  warning: warningUrl,
+  adhan: adhanUrl
 }
 
 /**
