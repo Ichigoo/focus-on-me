@@ -1,0 +1,19 @@
+appId: com.simo.focus-on-me
+productName: Focus On Me
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - package.json
+asar: true
+npmRebuild: false
+win:
+  target: nsis
+  icon: resources/icon.png
+nsis:
+  oneClick: true
+  perMachine: false
+  deleteAppDataOnUninstall: false
+  artifactName: FocusOnMe-Setup-${version}.${ext}

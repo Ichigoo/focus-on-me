@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/lora';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f6f4ee;
+  --surface: #ffffff;
+  --surface-2: #eeebe2;
+  --line: #e3dfd3;
+  --ink: #243230;
+  --ink-muted: #5f6e68;
+  --accent: #37675c;
+  --accent-contrast: #ffffff;
+  --accent-soft: #dce9e2;
+  --pause: #8a6d3f;
+  --pause-soft: #efe7d8;
+  --danger: #a84b4b;
+  --overlay-from: #f6f4ee;
+  --overlay-to: #dce9e2;
+}
+
+.dark {
+  --bg: #0f1717;
+  --surface: #182220;
+  --surface-2: #202c2a;
+  --line: #2a3835;
+  --ink: #e6efea;
+  --ink-muted: #9db2a9;
+  --accent: #6fbfad;
+  --accent-contrast: #0f1717;
+  --accent-soft: #1e332f;
+  --pause: #d6b98c;
+  --pause-soft: #2e2a20;
+  --danger: #d08c8c;
+  --overlay-from: #0f1717;
+  --overlay-to: #1e332f;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-accent: var(--accent);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-soft: var(--accent-soft);
+  --color-pause: var(--pause);
+  --color-pause-soft: var(--pause-soft);
+  --color-danger: var(--danger);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Lora Variable', ui-serif, Georgia, serif;
+  --radius-card: 16px;
+  --radius-btn: 10px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+
+.timer-digits {
+  font-variant-numeric: tabular-nums;
+  font-weight: 250;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.card-shadow {
+  box-shadow: 0 1px 3px rgb(36 50 48 / 0.06);
+}
+.dark .card-shadow {
+  box-shadow: none;
+}
+
+/* Breathing gradient for the pause overlay */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+.breathing {
+  animation: breathe 8s ease-in-out infinite;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+    transform: scale(1.015);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.overlay-in {
+  animation: overlay-in 500ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing,
+  .overlay-in {
+    animation: none;
+  }
+  body {
+    transition: none;
+  }
+}
+
+/* visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
