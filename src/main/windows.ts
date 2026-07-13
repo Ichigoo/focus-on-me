@@ -86,7 +86,8 @@ export function createWidget(): void {
     show: false,
     webPreferences: { preload, sandbox: false }
   })
-  widget.setAlwaysOnTop(true, 'floating')
+  widget.setAlwaysOnTop(true, 'screen-saver')
+  widget.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   widget.on('ready-to-show', () => widget?.show())
   load(widget, 'widget')
 }
