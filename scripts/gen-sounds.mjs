@@ -105,4 +105,33 @@ writeFileSync(
   )
 )
 
+// task-reminder: short two-note ping — distinct from the warning chime
+writeFileSync(
+  join(OUT, 'task-reminder.wav'),
+  toWav(
+    renderNotes(
+      [
+        { freq: 880.0, start: 0, dur: 0.35, gain: 0.85 }, // A5
+        { freq: 1046.5, start: 0.12, dur: 0.4, gain: 0.9 } // C6
+      ],
+      0.6
+    )
+  )
+)
+
+// task-done: bright ascending triad — quick celebratory chime
+writeFileSync(
+  join(OUT, 'task-done.wav'),
+  toWav(
+    renderNotes(
+      [
+        { freq: 523.25, start: 0, dur: 0.35, gain: 0.85 }, // C5
+        { freq: 659.26, start: 0.1, dur: 0.4, gain: 0.9 }, // E5
+        { freq: 783.99, start: 0.2, dur: 0.6, gain: 1.0 } // G5
+      ],
+      0.8
+    )
+  )
+)
+
 console.log('chimes written to', OUT)

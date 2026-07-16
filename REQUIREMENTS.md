@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-A desktop app to help you focus using the Pomodoro technique or your own custom focus/pause methods. Pauses take over your screen with a custom motivational message, time is tracked per project, and a dashboard shows your progress. It also has an Adhan (prayer times) section: pick a location and get today's prayer times plus optional desktop notifications. Desktop (Windows) first, Android later.
+A desktop app to help you focus using the Pomodoro technique or your own custom focus/pause methods. Pauses take over your screen with a custom motivational message, time is tracked per project, and a dashboard shows your progress. It also has an Adhan (prayer times) section: pick a location and get today's prayer times plus optional desktop notifications. A Tasks module rounds out the daily routine: schedule daily/weekly/one-time to-dos, mark them done or skipped, and build a per-task streak, all surfaced on a Home screen alongside shortcuts to the rest of the app. Desktop (Windows) first, Android later.
 
 > This document is kept in sync with the shipped app — it describes the current implementation, not just the original pre-build spec.
 
@@ -62,6 +62,7 @@ A desktop app to help you focus using the Pomodoro technique or your own custom 
 
 ### 3.8 Settings
 - Manage methods, projects, pause messages, sound toggles.
+- Task reminder + reminder sound toggles.
 - "Launch on startup" toggle.
 - Mini-widget on/off toggle.
 - Theme: follows system (light/dark) by default.
@@ -74,6 +75,16 @@ A desktop app to help you focus using the Pomodoro technique or your own custom 
 - **Today's times**: Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha, computed client-side and refreshed periodically; the next upcoming prayer is highlighted with a live countdown, rolling over to tomorrow's Fajr once Isha has passed.
 - **Notifications**: master on/off toggle, an independent "play sound" toggle (a synthesized chime, not a real vocal Adhan recording), and per-prayer on/off toggles (Fajr/Dhuhr/Asr/Maghrib/Isha — Sunrise is informational only, no notification). Notification scheduling runs in the main process so it fires even if all windows are hidden.
 - **Test notification**: a button that fires an immediate preview notification + chime on demand, regardless of the toggles above, so the alert can be previewed without waiting for a real prayer time.
+
+### 3.10 Tasks & Home
+- **Home screen is the default landing page** (`/`); Focus moved to `/focus`. Home shows a greeting, today's scheduled tasks, a banner linking back to `/focus` if a session is already running, and shortcut cards to Focus/Dashboard/Adhan/Settings.
+- **Scheduling**: each task is `daily`, `weekly` (specific weekdays, picked as Monday-first pills in the UI), or `once` (single date). Optional time-of-day; if set, fires a native notification + optional chime at that time, even while the app is hidden in the tray.
+- **Done / ignored**: one row per task per local day. Marking either is undoable (tap again to clear it back to pending).
+- **Streaks**: a per-task streak of consecutive scheduled days marked done, computed on read (no stored counter). Ignoring or missing a scheduled day resets the streak to 0; today staying unmarked doesn't break it (same tolerance as the focus streak on the Dashboard).
+- **Overdue one-time tasks**: an unactioned `once` task carries forward to today's Home list labeled "overdue" instead of disappearing after its date; past one-time tasks (completed, missed, or still overdue) stay listed on the Tasks page until deleted.
+- **Feel**: marking a task done plays a chime and a confetti burst from the check button; an "all done for today" celebration fires once per day when every scheduled task is done or skipped (with at least one done). Streaks of 3+ show a flickering flame.
+- **Tasks page** (`/tasks`): full CRUD — create/edit name, schedule, and optional reminder time; delete with confirmation.
+- **Settings**: independent toggles for task reminders and their sound.
 
 ## 4. Design Direction
 - Clean, modern, relaxing: sage green / soft teal accents on warm off-white; dark mode uses deep slate + muted teal.
@@ -90,9 +101,10 @@ A desktop app to help you focus using the Pomodoro technique or your own custom 
   - Main window — start screen, dashboard, Adhan, settings (client-side routed SPA); stays alive hidden in the tray (owns audio playback) rather than closing.
   - Mini widget — small frameless always-on-top timer; shown/hidden explicitly, never simultaneously with the main window.
   - Overlay — one `BrowserWindow` per display, created via `screen.getAllDisplays()` when a pause starts, recreated if displays change mid-pause.
-- **IPC**: typed API via `contextBridge` (preload script), namespaced by domain — `projects:*`, `methods:*`, `messages:*`, `settings:*`, `session:*` (`start`/`pauseResume`/`skipPause`/`forcePause`/`stop`), `stats:*`, `ui:*`, `adhan:*` (`searchLocation`, `test`). `timer:state`, `theme:dark`, `sound:play`, `settings:changed` events are broadcast to renderers.
+- **IPC**: typed API via `contextBridge` (preload script), namespaced by domain — `projects:*`, `methods:*`, `messages:*`, `settings:*`, `session:*` (`start`/`pauseResume`/`skipPause`/`forcePause`/`stop`), `stats:*`, `ui:*`, `adhan:*` (`searchLocation`, `test`), `tasks:*` (`list`, `create`, `update`, `remove`, `listForDay`, `setStatus`). `timer:state`, `theme:dark`, `sound:play`, `settings:changed`, `tasks:changed` events are broadcast to renderers.
 - **Charts**: Recharts (bundled, no external requests).
-- **Sounds**: bundled, synthesized (not recorded) WAV chimes — pause-start, pause-end, warning, adhan — generated by `scripts/gen-sounds.mjs`; played in the main window's renderer on a `sound:play` broadcast.
+- **Sounds**: bundled, synthesized (not recorded) WAV chimes — pause-start, pause-end, warning, adhan, task-reminder, task-done — generated by `scripts/gen-sounds.mjs`; played in the main window's renderer on a `sound:play` broadcast (task-done also plays directly in the renderer for instant feedback on the Home screen).
+- **Task reminders**: `src/main/tasks/scheduler.ts` mirrors the Adhan scheduler — a `setTimeout` array armed from today's pending timed tasks, re-armed shortly after local midnight (also broadcasting `tasks:changed` so Home rolls over to the new day).
 - **Prayer times**: the `adhan` npm library (pure JS, no runtime deps) wrapped in `src/shared/prayerTimes.ts`, used both by the main-process notification scheduler and the renderer's live display — no duplicated calculation logic.
 - **Location search**: proxied through the main process (`src/main/adhan/geocode.ts`) to the free Open-Meteo Geocoding API, since the renderer's CSP blocks direct external fetches.
 
@@ -106,9 +118,13 @@ intervals(id, session_id, kind, started_at, planned_sec, actual_sec, skipped)  -
 settings(key, value)   -- generic key-value store (JSON-encoded values), typed as `AppSettings` in shared/types.ts:
                         --   sound toggles, masterMute, randomizeMessages, widgetEnabled, launchOnStartup,
                         --   lastProjectId/lastMethodId, adhanLocation, adhanMethod, adhanMadhab,
-                        --   adhanNotificationsEnabled, adhanSoundEnabled, adhanEnabledPrayers
+                        --   adhanNotificationsEnabled, adhanSoundEnabled, adhanEnabledPrayers,
+                        --   taskRemindersEnabled, soundTaskReminder
+tasks(id, name, schedule_kind, weekdays, once_date, time_hhmm, archived, created_at, created_day)
+                        -- schedule_kind: daily | weekly | once; weekdays: bitmask, bit = 1 << Date.getDay() (bit0=Sun)
+task_completions(task_id, day, status, marked_at)  -- composite PK (task_id, day); status: done | ignored
 ```
-No dedicated Adhan tables — location/method/madhab/notification prefs live in `settings`; prayer times themselves are computed on demand (not stored).
+No dedicated Adhan tables — location/method/madhab/notification prefs live in `settings`; prayer times themselves are computed on demand (not stored). Task streaks are likewise computed on demand from `task_completions`, not stored.
 
 ## 6. Build Milestones
 
@@ -122,6 +138,7 @@ All shipped:
 6. ✅ Dashboard: stats queries + charts + history log.
 7. ✅ Settings & polish: methods/projects/messages CRUD UIs, theme, launch-on-startup, then package a Windows installer.
 8. ✅ Adhan section: location search, prayer-time calculation, today's-times display with countdown, notification scheduling + synthesized chime, test-notification button.
+9. ✅ Tasks & Home: task scheduling/CRUD, done/ignore with streaks, timed reminders, confetti + chime feedback, Home screen as the new default route.
 
 ## 7. Explicitly Out of Scope for v1
 - **Data backup/export/import**: local-only SQLite with no export path in v1. Accepted risk — revisit if data loss becomes a real concern.

@@ -61,6 +61,15 @@ const api: Api = {
   adhan: {
     searchLocation: (query) => ipcRenderer.invoke('adhan:searchLocation', query),
     test: () => ipcRenderer.send('adhan:test')
+  },
+  tasks: {
+    list: () => ipcRenderer.invoke('tasks:list'),
+    create: (input) => ipcRenderer.invoke('tasks:create', input),
+    update: (id, input) => ipcRenderer.invoke('tasks:update', id, input),
+    remove: (id) => ipcRenderer.invoke('tasks:remove', id),
+    listForDay: (day) => ipcRenderer.invoke('tasks:listForDay', day),
+    setStatus: (taskId, day, status) => ipcRenderer.invoke('tasks:setStatus', taskId, day, status),
+    onChanged: on<void>('tasks:changed')
   }
 }
 

@@ -14,6 +14,7 @@ export default function Settings(): React.JSX.Element {
         <ProjectsSection />
         <MessagesSection />
         <SoundsSection />
+        <TasksSection />
         <GeneralSection />
       </div>
     </div>
@@ -431,6 +432,41 @@ function SoundsSection(): React.JSX.Element {
             <Toggle checked={prefs[r.key]} onChange={(v) => setPref(r.key, v)} label={r.label} />
           </li>
         ))}
+      </ul>
+    </SectionCard>
+  )
+}
+
+// ---------------- tasks ----------------
+
+function TasksSection(): React.JSX.Element {
+  const [prefs, setPref] = useSettings()
+  if (!prefs) return <SectionCard title="Task reminders">…</SectionCard>
+  return (
+    <SectionCard title="Task reminders">
+      <ul className="flex flex-col divide-y divide-line/60">
+        <li className="flex items-center justify-between gap-3 py-3">
+          <div>
+            <p className="text-sm font-medium">Task reminders</p>
+            <p className="text-xs text-ink-muted">Desktop notification when a timed task is due</p>
+          </div>
+          <Toggle
+            checked={prefs.taskRemindersEnabled}
+            onChange={(v) => setPref('taskRemindersEnabled', v)}
+            label="Task reminders"
+          />
+        </li>
+        <li className="flex items-center justify-between gap-3 py-3">
+          <div>
+            <p className="text-sm font-medium">Reminder sound</p>
+            <p className="text-xs text-ink-muted">Play a chime alongside the notification</p>
+          </div>
+          <Toggle
+            checked={prefs.soundTaskReminder}
+            onChange={(v) => setPref('soundTaskReminder', v)}
+            label="Reminder sound"
+          />
+        </li>
       </ul>
     </SectionCard>
   )

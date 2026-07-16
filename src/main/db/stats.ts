@@ -15,7 +15,7 @@ function rangeStart(range: RangeFilter): number {
   return Math.floor(d.getTime() / 1000)
 }
 
-function localDayString(epochSec: number): string {
+export function localDayString(epochSec: number): string {
   const d = new Date(epochSec * 1000)
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')

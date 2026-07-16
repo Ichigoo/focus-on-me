@@ -53,6 +53,28 @@ const MIGRATIONS: string[] = [
   CREATE INDEX idx_intervals_session ON intervals(session_id);
   CREATE INDEX idx_intervals_kind_time ON intervals(kind, started_at);
   CREATE INDEX idx_sessions_time ON sessions(started_at);
+  `,
+  // v2 — tasks
+  `
+  CREATE TABLE tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    schedule_kind TEXT NOT NULL DEFAULT 'daily',
+    weekdays INTEGER NOT NULL DEFAULT 127,
+    once_date TEXT,
+    time_hhmm TEXT,
+    archived INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    created_day TEXT NOT NULL
+  );
+  CREATE TABLE task_completions (
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    day TEXT NOT NULL,
+    status TEXT NOT NULL,
+    marked_at INTEGER NOT NULL,
+    PRIMARY KEY (task_id, day)
+  );
+  CREATE INDEX idx_task_completions_day ON task_completions(day);
   `
 ]
 

@@ -1,12 +1,19 @@
 import { app, ipcMain, nativeTheme } from 'electron'
-import type { AppSettings, Method, RangeFilter, SettingKey } from '@shared/types'
+import type { AppSettings, Method, RangeFilter, SettingKey, TaskDayStatus, TaskInput } from '@shared/types'
 import { messages, methods, projects, sessions, settings } from './db/repos'
 import { stats } from './db/stats'
+import { tasksRepo } from './db/tasks'
 import { engine } from './timer/engine'
 import { broadcast, createWidget, getMainWindow, hideWidget, showMainWindow } from './windows'
 import { rebuildMenu } from './tray'
 import { searchLocation } from './adhan/geocode'
 import { rescheduleAdhan, testAdhan } from './adhan/scheduler'
+import { rescheduleTasks } from './tasks/scheduler'
+
+function tasksMutated(): void {
+  broadcast('tasks:changed')
+  rescheduleTasks()
+}
 
 export function registerIpc(): void {
   // ----- projects -----
@@ -45,11 +52,34 @@ export function registerIpc(): void {
     broadcast('settings:changed', all)
     rebuildMenu()
     if (key.startsWith('adhan')) rescheduleAdhan()
+    if (key.startsWith('task')) rescheduleTasks()
   })
 
   // ----- adhan -----
   ipcMain.handle('adhan:searchLocation', (_e, query: string) => searchLocation(query))
   ipcMain.on('adhan:test', () => testAdhan())
+
+  // ----- tasks -----
+  ipcMain.handle('tasks:list', () => tasksRepo.list())
+  ipcMain.handle('tasks:create', (_e, input: TaskInput) => {
+    const task = tasksRepo.create(input)
+    tasksMutated()
+    return task
+  })
+  ipcMain.handle('tasks:update', (_e, id: number, input: TaskInput) => {
+    tasksRepo.update(id, input)
+    tasksMutated()
+  })
+  ipcMain.handle('tasks:remove', (_e, id: number) => {
+    tasksRepo.remove(id)
+    tasksMutated()
+  })
+  ipcMain.handle('tasks:listForDay', (_e, day: string) => tasksRepo.listForDay(day))
+  ipcMain.handle('tasks:setStatus', (_e, taskId: number, day: string, status: TaskDayStatus | null) => {
+    const result = tasksRepo.setStatus(taskId, day, status)
+    tasksMutated()
+    return result
+  })
 
   // ----- session control -----
   ipcMain.handle('session:start', (_e, projectId: number, methodId: number) => {

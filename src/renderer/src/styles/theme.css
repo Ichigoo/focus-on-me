@@ -111,9 +111,34 @@ body {
   animation: overlay-in 500ms ease-out both;
 }
 
+@keyframes flame-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  25% {
+    transform: scale(1.08) rotate(-2deg);
+    opacity: 0.92;
+  }
+  50% {
+    transform: scale(0.96) rotate(1deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(1.05) rotate(-1deg);
+    opacity: 0.95;
+  }
+}
+.flame-flicker {
+  animation: flame-flicker 1.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .breathing,
-  .overlay-in {
+  .overlay-in,
+  .flame-flicker {
     animation: none;
   }
   body {

@@ -46,6 +46,8 @@ export interface AppSettings {
   adhanNotificationsEnabled: boolean
   adhanSoundEnabled: boolean
   adhanEnabledPrayers: Record<PrayerName, boolean>
+  taskRemindersEnabled: boolean
+  soundTaskReminder: boolean
 }
 
 export type SettingKey = keyof AppSettings
@@ -97,7 +99,7 @@ export interface HistoryEntry {
   status: SessionStatus
 }
 
-export type SoundKind = 'pause-start' | 'pause-end' | 'warning' | 'adhan'
+export type SoundKind = 'pause-start' | 'pause-end' | 'warning' | 'adhan' | 'task-reminder' | 'task-done'
 
 export interface AdhanLocation {
   lat: number
@@ -130,6 +132,29 @@ export interface AdhanTimes {
   asr: number
   maghrib: number
   isha: number
+}
+
+export type TaskScheduleKind = 'daily' | 'weekly' | 'once'
+export type TaskDayStatus = 'done' | 'ignored'
+
+export interface Task {
+  id: number
+  name: string
+  schedule_kind: TaskScheduleKind
+  weekdays: number
+  once_date: string | null
+  time_hhmm: string | null
+  archived: number
+  created_at: number
+  created_day: string
+}
+
+export type TaskInput = Pick<Task, 'name' | 'schedule_kind' | 'weekdays' | 'once_date' | 'time_hhmm'>
+
+export interface TaskWithStatus extends Task {
+  status: TaskDayStatus | 'pending'
+  streak: number
+  overdue?: boolean
 }
 
 export interface Api {
@@ -185,6 +210,15 @@ export interface Api {
     searchLocation: (query: string) => Promise<AdhanLocation[]>
     test: () => void
   }
+  tasks: {
+    list: () => Promise<TaskWithStatus[]>
+    create: (input: TaskInput) => Promise<Task>
+    update: (id: number, input: TaskInput) => Promise<void>
+    remove: (id: number) => Promise<void>
+    listForDay: (day: string) => Promise<TaskWithStatus[]>
+    setStatus: (taskId: number, day: string, status: TaskDayStatus | null) => Promise<TaskWithStatus[]>
+    onChanged: (cb: () => void) => () => void
+  }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -202,7 +236,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   adhanMadhab: 'Shafi',
   adhanNotificationsEnabled: false,
   adhanSoundEnabled: false,
-  adhanEnabledPrayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true }
+  adhanEnabledPrayers: { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
+  taskRemindersEnabled: true,
+  soundTaskReminder: true
 }
 
 export const PROJECT_COLORS = [

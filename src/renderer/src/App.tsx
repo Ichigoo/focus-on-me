@@ -1,15 +1,19 @@
 import { useEffect } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
-import { Timer, BarChart3, Moon, Settings as SettingsIcon } from 'lucide-react'
+import { House, Timer, ListChecks, BarChart3, Moon, Settings as SettingsIcon } from 'lucide-react'
 import { useTheme } from './lib/hooks'
 import { installSoundPlayer } from './lib/sounds'
+import Home from './pages/Home'
 import Start from './pages/Start'
+import Tasks from './pages/Tasks'
 import Dashboard from './pages/Dashboard'
 import Adhan from './pages/Adhan'
 import Settings from './pages/Settings'
 
 const navItems = [
-  { to: '/', label: 'Focus', icon: Timer },
+  { to: '/', label: 'Home', icon: House },
+  { to: '/focus', label: 'Focus', icon: Timer },
+  { to: '/tasks', label: 'Tasks', icon: ListChecks },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
   { to: '/adhan', label: 'Adhan', icon: Moon },
   { to: '/settings', label: 'Settings', icon: SettingsIcon }
@@ -44,7 +48,9 @@ export default function App(): React.JSX.Element {
       </nav>
       <main className="min-w-0 flex-1 overflow-y-auto">
         <Routes>
-          <Route path="/" element={<Start />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/focus" element={<Start />} />
+          <Route path="/tasks" element={<Tasks />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/adhan" element={<Adhan />} />
           <Route path="/settings" element={<Settings />} />

@@ -5,6 +5,7 @@ import { engine } from './timer/engine'
 import { registerIpc } from './ipc'
 import { createTray, setTrayTooltip } from './tray'
 import { rescheduleAdhan } from './adhan/scheduler'
+import { rescheduleTasks } from './tasks/scheduler'
 import {
   broadcast,
   closeOverlays,
@@ -36,6 +37,9 @@ if (!gotLock) {
 
     // ----- adhan -----
     rescheduleAdhan()
+
+    // ----- tasks -----
+    rescheduleTasks()
 
     // ----- theme -----
     nativeTheme.on('updated', () => broadcast('theme:dark', nativeTheme.shouldUseDarkColors))
