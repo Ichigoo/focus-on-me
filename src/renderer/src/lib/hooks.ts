@@ -11,6 +11,7 @@ export function todayString(): string {
 
 const IDLE_STATE: TimerState = {
   status: 'idle',
+  mode: 'pomodoro',
   phase: 'focus',
   round: 1,
   roundsBeforeLong: 4,
@@ -19,8 +20,9 @@ const IDLE_STATE: TimerState = {
   sessionId: null,
   projectId: null,
   projectName: '',
-  projectColor: '#37675C',
+  projectColor: '#8B5CF6',
   methodName: '',
+  taskName: null,
   pauseMessage: null,
   autoPaused: false
 }

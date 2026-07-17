@@ -1,21 +1,14 @@
-import { useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
-import {
-  BarChart3,
-  Check,
-  Clock,
-  Flame,
-  Moon,
-  PartyPopper,
-  Settings as SettingsIcon,
-  SkipForward,
-  Timer
-} from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Check, CheckCircle2, Clock, Flame, MoonStar, PartyPopper, Play } from 'lucide-react'
 import type { TaskWithStatus } from '@shared/types'
+import { computePrayerTimes, PRAYER_LABELS, PRAYER_ORDER } from '@shared/prayerTimes'
 import { useSettings, useTimerState, useTodayTasks } from '../lib/hooks'
+import { fmtClock, fmtDuration, phaseLabel } from '../lib/format'
 import { playSound } from '../lib/sounds'
 import { burstConfetti } from '../components/ConfettiBurst'
-import { Card, EmptyState } from '../components/ui'
+import { Card, Chip, EmptyState } from '../components/ui'
+import { TimerRing } from '../components/TimerRing'
 
 function greeting(): string {
   const h = new Date().getHours()
@@ -24,15 +17,48 @@ function greeting(): string {
   return 'Good evening'
 }
 
+const priorityTone = { high: 'danger', medium: 'warning', low: 'success' } as const
+
 export default function Home(): React.JSX.Element {
   const { tasks, loading, setStatus } = useTodayTasks()
   const [prefs] = useSettings()
   const timer = useTimerState()
+  const navigate = useNavigate()
   const muted = prefs?.masterMute ?? false
 
-  const doneCount = tasks.filter((t) => t.status === 'done').length
+  const [focusTodaySec, setFocusTodaySec] = useState(0)
+  const [streak, setStreak] = useState(0)
+
+  useEffect(() => {
+    let mounted = true
+    void window.api.stats.summary('today').then((s) => mounted && setFocusTodaySec(s.totalFocusSec))
+    void window.api.stats.summary('all').then((s) => mounted && setStreak(s.currentStreak))
+    return () => {
+      mounted = false
+    }
+  }, [timer.sessionId])
+
+  const todo = tasks.filter((t) => t.status === 'pending')
+  const done = tasks.filter((t) => t.status === 'done')
   const actionedCount = tasks.filter((t) => t.status !== 'pending').length
-  const allDone = tasks.length > 0 && actionedCount === tasks.length && doneCount > 0
+  const allDone = tasks.length > 0 && actionedCount === tasks.length && done.length > 0
+
+  // next prayer (only when an Adhan location is configured)
+  const nextPrayer = useMemo(() => {
+    if (!prefs?.adhanLocation) return null
+    const now = Date.now()
+    for (const dayOffset of [0, 1]) {
+      const date = new Date()
+      date.setDate(date.getDate() + dayOffset)
+      const times = computePrayerTimes(prefs.adhanLocation, prefs.adhanMethod, prefs.adhanMadhab, date)
+      for (const name of PRAYER_ORDER) {
+        if (times[name] > now) {
+          return { label: PRAYER_LABELS[name], at: times[name] }
+        }
+      }
+    }
+    return null
+  }, [prefs, timer.sessionId])
 
   const celebratedForDay = useRef<string | null>(null)
   const celebrationRef = useRef<HTMLDivElement>(null)
@@ -62,29 +88,91 @@ export default function Home(): React.JSX.Element {
     }
   }
 
-  const handleSkip = (task: TaskWithStatus): void => {
-    void setStatus(task.id, task.status === 'ignored' ? null : 'ignored')
+  const name = prefs?.userName?.trim()
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  })
+
+  const running = timer.status !== 'idle'
+  const progress =
+    running && timer.mode !== 'stopwatch' && timer.plannedSec > 0 ? 1 - timer.remainingSec / timer.plannedSec : 0
+  const ringColor = running && timer.phase !== 'focus' ? 'var(--pause)' : 'var(--accent)'
+
+  function nextPrayerText(): string | null {
+    if (!nextPrayer) return null
+    const minutes = Math.max(1, Math.round((nextPrayer.at - Date.now()) / 60000))
+    if (minutes < 90) return `${nextPrayer.label} in ${minutes}m`
+    return `${nextPrayer.label} at ${new Date(nextPrayer.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
-      <h1 className="font-display mb-1 text-3xl">{greeting()}</h1>
-      <p className="mb-8 text-sm text-ink-muted">Here&apos;s what&apos;s on today.</p>
+    <div className="mx-auto flex min-h-full max-w-3xl flex-col px-8 py-8">
+      <div className="mb-8 flex items-baseline justify-between gap-4">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {greeting()}
+          {name ? `, ${name}` : ''}
+        </h1>
+        <p className="shrink-0 text-sm text-ink-muted">{today}</p>
+      </div>
 
-      {timer.status !== 'idle' && (
-        <NavLink
-          to="/focus"
-          className="mb-6 flex items-center justify-between gap-3 rounded-(--radius-card) border border-accent/30 bg-accent-soft px-4 py-3 text-sm transition-transform duration-150 hover:scale-[1.005]"
+      {/* hero clock */}
+      <div className="mb-8 flex flex-col items-center gap-6">
+        <TimerRing progress={progress} size={230} stroke={4} color={ringColor}>
+          <div className="text-center">
+            <p className="timer-digits text-[54px] text-ink">
+              {running ? fmtClock(timer.remainingSec) : fmtClock(25 * 60)}
+            </p>
+            <p className="mt-1 text-sm text-ink-muted">
+              {running
+                ? timer.mode === 'stopwatch'
+                  ? 'Elapsed'
+                  : `${phaseLabel(timer.phase)}${timer.status === 'paused' ? ' · paused' : ''}`
+                : 'Ready when you are'}
+            </p>
+          </div>
+        </TimerRing>
+
+        <button
+          onClick={() => navigate('/focus')}
+          className="btn-gradient flex cursor-pointer items-center gap-2 rounded-(--radius-btn) px-8 py-3 text-base font-medium text-white transition-transform active:scale-[0.98]"
         >
-          <span className="font-medium text-ink">
-            {timer.phase === 'focus' ? 'Focus session in progress' : 'On a break'} · {timer.projectName}
-          </span>
-          <span className="font-medium text-accent">Open →</span>
-        </NavLink>
-      )}
+          <Play size={17} aria-hidden="true" />
+          {running ? 'Open session' : 'Start Focus'}
+        </button>
 
-      <Card className="mb-6 p-6">
-        <h2 className="mb-4 text-lg font-semibold">Today&apos;s tasks</h2>
+        {/* today at a glance */}
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-ink-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <Clock size={14} className="text-accent" aria-hidden="true" />
+            {fmtDuration(focusTodaySec)} today
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Flame size={14} className="text-warning" aria-hidden="true" />
+            {streak > 0 ? `${streak}-day streak` : 'No streak yet'}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-success" aria-hidden="true" />
+            {todo.length === 0 ? 'All tasks done' : `${todo.length} ${todo.length === 1 ? 'task' : 'tasks'} left`}
+          </span>
+          {nextPrayer && (
+            <span className="inline-flex items-center gap-1.5">
+              <MoonStar size={14} className="text-accent" aria-hidden="true" />
+              {nextPrayerText()}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* today's tasks */}
+      <Card className="p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Today&apos;s Tasks</h2>
+          <NavLink to="/tasks" className="text-xs font-medium text-accent hover:underline">
+            View all →
+          </NavLink>
+        </div>
 
         {!loading && tasks.length === 0 && (
           <>
@@ -97,104 +185,67 @@ export default function Home(): React.JSX.Element {
 
         {tasks.length > 0 && (
           <ul className="flex flex-col divide-y divide-line/60">
-            {tasks.map((task) => (
-              <TaskRow key={task.id} task={task} onDone={handleDone} onSkip={handleSkip} />
+            {[...todo, ...done].map((task) => (
+              <TaskRow key={task.id} task={task} onDone={handleDone} />
             ))}
           </ul>
         )}
 
         {allDone && (
-          <div ref={celebrationRef} className="mt-6 rounded-(--radius-card) bg-accent-soft px-4 py-6 text-center">
-            <PartyPopper size={28} className="mx-auto mb-2 text-accent" aria-hidden="true" />
-            <p className="font-display text-xl text-ink">All done for today</p>
+          <div ref={celebrationRef} className="mt-4 rounded-(--radius-card) bg-accent-soft px-4 py-5 text-center">
+            <PartyPopper size={26} className="mx-auto mb-2 text-accent" aria-hidden="true" />
+            <p className="text-lg font-semibold text-ink">All done for today</p>
             <p className="mt-1 text-sm text-ink-muted">Nice work — every task is handled.</p>
           </div>
         )}
       </Card>
-
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <ShortcutCard to="/focus" label="Focus" icon={Timer} />
-        <ShortcutCard to="/dashboard" label="Dashboard" icon={BarChart3} />
-        <ShortcutCard to="/adhan" label="Adhan" icon={Moon} />
-        <ShortcutCard to="/settings" label="Settings" icon={SettingsIcon} />
-      </div>
     </div>
   )
 }
 
 function TaskRow({
   task,
-  onDone,
-  onSkip
+  onDone
 }: {
   task: TaskWithStatus
   onDone: (task: TaskWithStatus, anchor: HTMLElement) => void
-  onSkip: (task: TaskWithStatus) => void
 }): React.JSX.Element {
   const isDone = task.status === 'done'
   const isIgnored = task.status === 'ignored'
 
   return (
-    <li className="flex items-center gap-3 py-3">
+    <li className="flex items-center gap-3 py-2.5">
       <button
         aria-label={isDone ? `Undo ${task.name}` : `Mark ${task.name} done`}
         aria-pressed={isDone}
         onClick={(e) => onDone(task, e.currentTarget)}
-        className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition-colors duration-150 ${
+        className={`flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition-colors duration-150 ${
           isDone ? 'border-accent bg-accent text-accent-contrast' : 'border-line text-transparent hover:border-accent/50'
         }`}
       >
-        <Check size={18} aria-hidden="true" />
+        <Check size={13} aria-hidden="true" />
       </button>
 
-      <div className={`min-w-0 flex-1 ${isIgnored ? 'text-ink-muted line-through' : ''}`}>
-        <p className="truncate text-sm font-medium">{task.name}</p>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-          {task.time_hhmm && (
-            <span className="inline-flex items-center gap-1">
-              <Clock size={11} aria-hidden="true" /> {task.time_hhmm}
-            </span>
-          )}
-          {task.overdue && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger">overdue</span>}
-          {task.streak > 0 && (
-            <span className={`inline-flex items-center gap-1 text-pause ${task.streak >= 3 ? 'flame-flicker' : ''}`}>
-              <Flame size={12} aria-hidden="true" /> {task.streak}
-            </span>
-          )}
-        </div>
+      <p
+        className={`min-w-0 flex-1 truncate text-sm ${
+          isDone || isIgnored ? 'text-ink-muted line-through' : 'font-medium'
+        }`}
+      >
+        {task.name}
+      </p>
+
+      <div className="flex shrink-0 items-center gap-2">
+        {task.streak > 0 && (
+          <span
+            className={`inline-flex items-center gap-1 text-xs text-warning ${task.streak >= 3 ? 'flame-flicker' : ''}`}
+          >
+            <Flame size={12} aria-hidden="true" /> {task.streak}
+          </span>
+        )}
+        {task.overdue && <Chip tone="danger">overdue</Chip>}
+        <Chip tone={priorityTone[task.priority]}>{task.priority}</Chip>
+        {task.time_hhmm && <span className="text-xs text-ink-muted">{task.time_hhmm}</span>}
       </div>
-
-      {!isDone && (
-        <button
-          aria-label={isIgnored ? `Undo skip for ${task.name}` : `Skip ${task.name}`}
-          aria-pressed={isIgnored}
-          onClick={() => onSkip(task)}
-          className={`shrink-0 cursor-pointer rounded-(--radius-btn) px-2.5 py-1.5 text-xs transition-colors duration-150 ${
-            isIgnored ? 'bg-surface-2 text-ink-muted' : 'text-ink-muted hover:bg-surface-2 hover:text-ink'
-          }`}
-        >
-          <SkipForward size={14} aria-hidden="true" />
-        </button>
-      )}
     </li>
-  )
-}
-
-function ShortcutCard({
-  to,
-  label,
-  icon: Icon
-}: {
-  to: string
-  label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
-}): React.JSX.Element {
-  return (
-    <NavLink to={to}>
-      <Card className="flex flex-col items-center gap-2 p-5 text-center transition-transform duration-150 hover:scale-[1.02]">
-        <Icon size={22} className="text-accent" />
-        <span className="text-sm font-medium text-ink">{label}</span>
-      </Card>
-    </NavLink>
   )
 }

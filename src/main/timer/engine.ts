@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events'
-import type { Method, Phase, Project, SoundKind, TimerState } from '@shared/types'
+import type { Method, Phase, Project, SoundKind, TimerMode, TimerState } from '@shared/types'
 import { messages, sessions, settings } from '../db/repos'
 
 /**
@@ -15,6 +15,9 @@ import { messages, sessions, settings } from '../db/repos'
  */
 export class TimerEngine extends EventEmitter {
   private status: TimerState['status'] = 'idle'
+  private mode: TimerMode = 'pomodoro'
+  private simpleDurationSec = 0 // countdown length; unused for other modes
+  private taskName: string | null = null
   private phase: Phase = 'focus'
   private round = 1
   private project: Project | null = null
@@ -32,10 +35,38 @@ export class TimerEngine extends EventEmitter {
 
   // ---------- public API ----------
 
-  start(project: Project, method: Method): void {
+  start(project: Project, method: Method, taskName: string | null = null): void {
     if (this.status !== 'idle') this.stop()
     this.project = project
     this.method = method
+    this.mode = 'pomodoro'
+    this.taskName = taskName
+    this.sessionId = sessions.create(project.id, method.id)
+    this.round = 1
+    this.status = 'running'
+    this.beginPhase('focus')
+    this.ticker = setInterval(() => this.tick(), 500)
+    this.emit('session-started')
+    this.emitState()
+  }
+
+  /**
+   * Single-phase session: a fixed countdown or an open-ended stopwatch.
+   * `method` must be the hidden preset row matching the mode (sessions.method_id is NOT NULL).
+   */
+  startSimple(
+    project: Project,
+    method: Method,
+    mode: 'countdown' | 'stopwatch',
+    durationSec: number,
+    taskName: string | null = null
+  ): void {
+    if (this.status !== 'idle') this.stop()
+    this.project = project
+    this.method = method
+    this.mode = mode
+    this.taskName = taskName
+    this.simpleDurationSec = mode === 'countdown' ? Math.max(60, durationSec) : 0
     this.sessionId = sessions.create(project.id, method.id)
     this.round = 1
     this.status = 'running'
@@ -106,16 +137,20 @@ export class TimerEngine extends EventEmitter {
   getState(): TimerState {
     return {
       status: this.status,
+      mode: this.mode,
       phase: this.phase,
       round: this.round,
       roundsBeforeLong: this.method?.rounds_before_long ?? 4,
-      remainingSec: Math.max(0, this.plannedSec - this.elapsedSec()),
+      // Stopwatch counts up: remainingSec carries the elapsed time instead.
+      remainingSec:
+        this.mode === 'stopwatch' ? Math.floor(this.elapsedSec()) : Math.max(0, this.plannedSec - this.elapsedSec()),
       plannedSec: this.plannedSec,
       sessionId: this.sessionId,
       projectId: this.project?.id ?? null,
       projectName: this.project?.name ?? '',
-      projectColor: this.project?.color ?? '#37675C',
+      projectColor: this.project?.color ?? '#8B5CF6',
       methodName: this.method?.name ?? '',
+      taskName: this.taskName,
       pauseMessage: this.pauseMessage,
       autoPaused: this.autoPaused
     }
@@ -136,8 +171,12 @@ export class TimerEngine extends EventEmitter {
     this.intervalStartedSec = Math.floor(Date.now() / 1000)
     this.warned = false
     const m = this.method!
-    this.plannedSec =
-      phase === 'focus' ? m.focus_sec : phase === 'short_pause' ? m.short_pause_sec : m.long_pause_sec
+    if (this.mode === 'pomodoro') {
+      this.plannedSec =
+        phase === 'focus' ? m.focus_sec : phase === 'short_pause' ? m.short_pause_sec : m.long_pause_sec
+    } else {
+      this.plannedSec = this.simpleDurationSec // 0 for stopwatch
+    }
     this.pauseMessage = phase === 'focus' ? null : this.pickMessage()
   }
 
@@ -155,6 +194,11 @@ export class TimerEngine extends EventEmitter {
 
   private tick(): void {
     if (this.status !== 'running') return
+    if (this.mode === 'stopwatch') {
+      // Open-ended: never auto-completes, just report elapsed time.
+      this.emitState()
+      return
+    }
     const remaining = this.plannedSec - this.elapsedSec()
     // 1-minute warning before an upcoming pause (only meaningful for focus phases
     // long enough that the warning isn't immediate noise).
@@ -175,6 +219,16 @@ export class TimerEngine extends EventEmitter {
     const prev = this.phase
     const actual = Math.min(this.elapsedSec(), this.plannedSec)
     sessions.addInterval(sessionId, prev, this.intervalStartedSec, this.plannedSec, actual, skipped)
+
+    // Simple modes have a single focus phase: finishing it ends the session.
+    if (this.mode !== 'pomodoro') {
+      sessions.end(sessionId, 'completed')
+      this.reset()
+      this.playSound('pause-end')
+      this.emit('session-ended')
+      this.emitState()
+      return
+    }
 
     if (prev === 'focus') {
       const next: Phase = this.round % m.rounds_before_long === 0 ? 'long_pause' : 'short_pause'
@@ -207,6 +261,9 @@ export class TimerEngine extends EventEmitter {
     if (this.ticker) clearInterval(this.ticker)
     this.ticker = null
     this.status = 'idle'
+    this.mode = 'pomodoro'
+    this.simpleDurationSec = 0
+    this.taskName = null
     this.phase = 'focus'
     this.round = 1
     this.project = null

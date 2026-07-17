@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Api, AppSettings, SoundKind, TimerState } from '@shared/types'
+import type { Api, AppSettings, SoundKind, TimerState, ToastPayload } from '@shared/types'
 
 function on<T>(channel: string): (cb: (payload: T) => void) => () => void {
   return (cb) => {
@@ -36,7 +36,11 @@ const api: Api = {
     set: (key, value) => ipcRenderer.invoke('settings:set', key, value)
   },
   session: {
-    start: (projectId, methodId) => ipcRenderer.invoke('session:start', projectId, methodId),
+    start: (projectId, methodId, taskName) => ipcRenderer.invoke('session:start', projectId, methodId, taskName),
+    startPomodoro: (projectId, config, taskName) =>
+      ipcRenderer.invoke('session:startPomodoro', projectId, config, taskName),
+    startSimple: (projectId, mode, durationSec, taskName) =>
+      ipcRenderer.invoke('session:startSimple', projectId, mode, durationSec, taskName),
     pauseResume: () => ipcRenderer.invoke('session:pauseResume'),
     skipPause: () => ipcRenderer.invoke('session:skipPause'),
     forcePause: () => ipcRenderer.invoke('session:forcePause'),
@@ -44,6 +48,8 @@ const api: Api = {
   },
   stats: {
     summary: (range) => ipcRenderer.invoke('stats:summary', range),
+    summaryExtended: (range) => ipcRenderer.invoke('stats:summaryExtended', range),
+    trend: (range) => ipcRenderer.invoke('stats:trend', range),
     daily: (days) => ipcRenderer.invoke('stats:daily', days),
     perProject: (range) => ipcRenderer.invoke('stats:perProject', range),
     history: (limit) => ipcRenderer.invoke('stats:history', limit)
@@ -56,7 +62,10 @@ const api: Api = {
     onTimer: on<TimerState>('timer:state'),
     onTheme: on<boolean>('theme:dark'),
     onSound: on<SoundKind>('sound:play'),
-    onSettingsChanged: on<AppSettings>('settings:changed')
+    onSettingsChanged: on<AppSettings>('settings:changed'),
+    onToast: on<ToastPayload>('toast:show'),
+    getPendingToast: () => ipcRenderer.invoke('toast:getPending'),
+    closeToast: () => ipcRenderer.send('ui:closeToast')
   },
   adhan: {
     searchLocation: (query) => ipcRenderer.invoke('adhan:searchLocation', query),
@@ -70,6 +79,22 @@ const api: Api = {
     listForDay: (day) => ipcRenderer.invoke('tasks:listForDay', day),
     setStatus: (taskId, day, status) => ipcRenderer.invoke('tasks:setStatus', taskId, day, status),
     onChanged: on<void>('tasks:changed')
+  },
+  subtasks: {
+    add: (taskId, name) => ipcRenderer.invoke('subtasks:add', taskId, name),
+    toggle: (id, done) => ipcRenderer.invoke('subtasks:toggle', id, done),
+    remove: (id) => ipcRenderer.invoke('subtasks:remove', id)
+  },
+  blockedApps: {
+    list: () => ipcRenderer.invoke('blockedApps:list'),
+    add: (name, exe) => ipcRenderer.invoke('blockedApps:add', name, exe),
+    setEnabled: (id, enabled) => ipcRenderer.invoke('blockedApps:setEnabled', id, enabled),
+    remove: (id) => ipcRenderer.invoke('blockedApps:remove', id),
+    onChanged: on<void>('blockedApps:changed')
+  },
+  backup: {
+    exportSettings: () => ipcRenderer.invoke('backup:exportSettings'),
+    importSettings: () => ipcRenderer.invoke('backup:importSettings')
   }
 }
 

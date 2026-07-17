@@ -1,22 +1,39 @@
 import { useEffect, useState } from 'react'
-import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X, Check } from 'lucide-react'
-import type { Method, PauseMessage, Project } from '@shared/types'
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+  Check
+} from 'lucide-react'
+import type { Method, PauseMessage, Project, ThemePreference } from '@shared/types'
 import { PROJECT_COLORS } from '@shared/types'
 import { useSettings } from '../lib/hooks'
-import { Button, ConfirmDialog, EmptyState, SectionCard, Toggle } from '../components/ui'
+import { Button, ConfirmDialog, EmptyState, SectionCard, Segmented, Toggle } from '../components/ui'
 
 export default function Settings(): React.JSX.Element {
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
-      <h1 className="font-display mb-8 text-3xl">Settings</h1>
+    <div className="mx-auto max-w-3xl px-8 py-8">
+      <h1 className="mb-1 text-3xl font-semibold tracking-tight">Settings</h1>
+      <p className="mb-8 text-sm text-ink-muted">Customize your Focus On Me experience</p>
       <div className="flex flex-col gap-6">
+        <GeneralSection />
+        <WidgetSection />
+        <NotificationsSection />
         <MethodsSection />
         <ProjectsSection />
         <MessagesSection />
-        <SoundsSection />
-        <TasksSection />
-        <GeneralSection />
+        <BackupSection />
       </div>
+      <p className="mt-8 text-center text-xs text-ink-muted/70">
+        Focus On Me · Electron + React + TypeScript · Built for deep work
+      </p>
     </div>
   )
 }
@@ -409,19 +426,33 @@ function MessagesSection(): React.JSX.Element {
   )
 }
 
-// ---------------- sounds ----------------
+// ---------------- notifications ----------------
 
-function SoundsSection(): React.JSX.Element {
+function NotificationsSection(): React.JSX.Element {
   const [prefs, setPref] = useSettings()
-  if (!prefs) return <SectionCard title="Sounds">…</SectionCard>
-  const rows: { key: 'soundPauseStart' | 'soundPauseEnd' | 'soundWarning' | 'masterMute'; label: string; hint: string }[] = [
+  if (!prefs) return <SectionCard title="Notifications">…</SectionCard>
+  const rows: {
+    key:
+      | 'soundPauseStart'
+      | 'soundPauseEnd'
+      | 'soundWarning'
+      | 'taskRemindersEnabled'
+      | 'soundTaskReminder'
+      | 'notifyOnAppKill'
+      | 'masterMute'
+    label: string
+    hint: string
+  }[] = [
     { key: 'soundPauseStart', label: 'Break starts', hint: 'Gentle chime when a break begins' },
     { key: 'soundPauseEnd', label: 'Break ends', hint: 'Chime when focus resumes' },
     { key: 'soundWarning', label: '1-minute warning', hint: 'Soft ping one minute before a break' },
-    { key: 'masterMute', label: 'Mute all sounds', hint: 'Overrides the toggles above' }
+    { key: 'taskRemindersEnabled', label: 'Task reminders', hint: 'Desktop notification when a timed task is due' },
+    { key: 'soundTaskReminder', label: 'Reminder sound', hint: 'Play a chime alongside the notification' },
+    { key: 'notifyOnAppKill', label: 'App-block notifications', hint: 'Notify when a distracting app is closed' },
+    { key: 'masterMute', label: 'Mute all sounds', hint: 'Overrides the sound toggles above' }
   ]
   return (
-    <SectionCard title="Sounds">
+    <SectionCard title="Notifications">
       <ul className="flex flex-col divide-y divide-line/60">
         {rows.map((r) => (
           <li key={r.key} className="flex items-center justify-between gap-3 py-3">
@@ -437,55 +468,33 @@ function SoundsSection(): React.JSX.Element {
   )
 }
 
-// ---------------- tasks ----------------
-
-function TasksSection(): React.JSX.Element {
-  const [prefs, setPref] = useSettings()
-  if (!prefs) return <SectionCard title="Task reminders">…</SectionCard>
-  return (
-    <SectionCard title="Task reminders">
-      <ul className="flex flex-col divide-y divide-line/60">
-        <li className="flex items-center justify-between gap-3 py-3">
-          <div>
-            <p className="text-sm font-medium">Task reminders</p>
-            <p className="text-xs text-ink-muted">Desktop notification when a timed task is due</p>
-          </div>
-          <Toggle
-            checked={prefs.taskRemindersEnabled}
-            onChange={(v) => setPref('taskRemindersEnabled', v)}
-            label="Task reminders"
-          />
-        </li>
-        <li className="flex items-center justify-between gap-3 py-3">
-          <div>
-            <p className="text-sm font-medium">Reminder sound</p>
-            <p className="text-xs text-ink-muted">Play a chime alongside the notification</p>
-          </div>
-          <Toggle
-            checked={prefs.soundTaskReminder}
-            onChange={(v) => setPref('soundTaskReminder', v)}
-            label="Reminder sound"
-          />
-        </li>
-      </ul>
-    </SectionCard>
-  )
-}
-
 // ---------------- general ----------------
 
 function GeneralSection(): React.JSX.Element {
   const [prefs, setPref] = useSettings()
+  const [name, setName] = useState<string | null>(null)
   if (!prefs) return <SectionCard title="General">…</SectionCard>
+  const nameValue = name ?? prefs.userName
   return (
     <SectionCard title="General">
       <ul className="flex flex-col divide-y divide-line/60">
         <li className="flex items-center justify-between gap-3 py-3">
           <div>
-            <p className="text-sm font-medium">Mini timer widget</p>
-            <p className="text-xs text-ink-muted">Small floating timer while you focus</p>
+            <p className="text-sm font-medium">Your name</p>
+            <p className="text-xs text-ink-muted">Shown in the dashboard greeting and sidebar</p>
           </div>
-          <Toggle checked={prefs.widgetEnabled} onChange={(v) => setPref('widgetEnabled', v)} label="Mini timer widget" />
+          <input
+            value={nameValue}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => {
+              if (name !== null && name !== prefs.userName) setPref('userName', name.trim())
+              setName(null)
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+            placeholder="e.g. Alex"
+            aria-label="Your name"
+            className="h-9 w-48 rounded-(--radius-btn) border border-line bg-surface px-3 text-sm"
+          />
         </li>
         <li className="flex items-center justify-between gap-3 py-3">
           <div>
@@ -497,11 +506,100 @@ function GeneralSection(): React.JSX.Element {
         <li className="flex items-center justify-between gap-3 py-3">
           <div>
             <p className="text-sm font-medium">Theme</p>
-            <p className="text-xs text-ink-muted">Follows your Windows light/dark setting</p>
+            <p className="text-xs text-ink-muted">Dark is the signature look; System follows Windows</p>
           </div>
-          <span className="text-sm text-ink-muted">System</span>
+          <Segmented<ThemePreference>
+            options={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' }
+            ]}
+            value={prefs.themePreference}
+            onChange={(v) => setPref('themePreference', v)}
+          />
         </li>
       </ul>
+    </SectionCard>
+  )
+}
+
+// ---------------- floating widget ----------------
+
+function WidgetSection(): React.JSX.Element {
+  const [prefs, setPref] = useSettings()
+  if (!prefs) return <SectionCard title="Floating widget">…</SectionCard>
+  const opacityPct = Math.round((prefs.widgetOpacity ?? 1) * 100)
+  return (
+    <SectionCard title="Floating widget">
+      <ul className="flex flex-col divide-y divide-line/60">
+        <li className="flex items-center justify-between gap-3 py-3">
+          <div>
+            <p className="text-sm font-medium">Show widget during sessions</p>
+            <p className="text-xs text-ink-muted">Small floating timer while you focus</p>
+          </div>
+          <Toggle checked={prefs.widgetEnabled} onChange={(v) => setPref('widgetEnabled', v)} label="Show widget" />
+        </li>
+        <li className="flex items-center justify-between gap-3 py-3">
+          <div>
+            <p className="text-sm font-medium">Always on top</p>
+            <p className="text-xs text-ink-muted">Keep the widget above all other windows</p>
+          </div>
+          <Toggle
+            checked={prefs.widgetAlwaysOnTop}
+            onChange={(v) => setPref('widgetAlwaysOnTop', v)}
+            label="Always on top"
+          />
+        </li>
+        <li className="flex items-center justify-between gap-3 py-3">
+          <div>
+            <p className="text-sm font-medium">Opacity — {opacityPct}%</p>
+            <p className="text-xs text-ink-muted">Lower makes the widget see-through</p>
+          </div>
+          <input
+            type="range"
+            min={40}
+            max={100}
+            step={5}
+            value={opacityPct}
+            onChange={(e) => setPref('widgetOpacity', Number(e.target.value) / 100)}
+            aria-label="Widget opacity"
+            className="w-40 accent-(--accent)"
+          />
+        </li>
+      </ul>
+    </SectionCard>
+  )
+}
+
+// ---------------- backup & data ----------------
+
+function BackupSection(): React.JSX.Element {
+  const [message, setMessage] = useState('')
+  return (
+    <SectionCard title="Backup & data">
+      <div className="flex gap-2">
+        <Button
+          onClick={() =>
+            void window.api.backup.exportSettings().then((r) => {
+              if (r.ok) setMessage('Settings exported.')
+              else if (r.reason !== 'canceled') setMessage(r.reason ?? 'Export failed')
+            })
+          }
+        >
+          <Download size={15} aria-hidden="true" /> Export settings
+        </Button>
+        <Button
+          onClick={() =>
+            void window.api.backup.importSettings().then((r) => {
+              if (r.ok) setMessage('Settings imported.')
+              else if (r.reason !== 'canceled') setMessage(r.reason ?? 'Import failed')
+            })
+          }
+        >
+          <Upload size={15} aria-hidden="true" /> Import settings
+        </Button>
+      </div>
+      {message && <p className="mt-3 text-sm text-ink-muted">{message}</p>}
     </SectionCard>
   )
 }

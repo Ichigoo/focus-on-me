@@ -1,10 +1,15 @@
-import { BrowserWindow, screen, shell } from 'electron'
+import { BrowserWindow, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
+import { settings } from './db/repos'
 import icon from '../../resources/icon.png?asset'
+
+function themeBackground(): string {
+  return nativeTheme.shouldUseDarkColors ? '#0D0D12' : '#F7F6FB'
+}
 
 const DEV_URL = process.env['ELECTRON_RENDERER_URL']
 
-function load(win: BrowserWindow, page: 'index' | 'widget' | 'overlay', query = ''): void {
+function load(win: BrowserWindow, page: 'index' | 'widget' | 'overlay' | 'toast', query = ''): void {
   if (DEV_URL) {
     win.loadURL(`${DEV_URL}/${page === 'index' ? '' : page + '.html'}${query}`)
   } else {
@@ -33,7 +38,7 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     icon,
-    backgroundColor: '#0F1717',
+    backgroundColor: themeBackground(),
     webPreferences: { preload, sandbox: false }
   })
   mainWindow.on('ready-to-show', () => mainWindow?.show())
@@ -72,6 +77,7 @@ export function createWidget(): void {
     return
   }
   const { workArea } = screen.getPrimaryDisplay()
+  const alwaysOnTop = settings.getAll().widgetAlwaysOnTop
   widget = new BrowserWindow({
     width: 260,
     height: 76,
@@ -80,14 +86,16 @@ export function createWidget(): void {
     frame: false,
     transparent: true,
     resizable: false,
-    alwaysOnTop: true,
+    alwaysOnTop,
     skipTaskbar: true,
     focusable: true,
     show: false,
     webPreferences: { preload, sandbox: false }
   })
-  widget.setAlwaysOnTop(true, 'screen-saver')
-  widget.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  if (alwaysOnTop) {
+    widget.setAlwaysOnTop(true, 'screen-saver')
+    widget.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
   widget.on('ready-to-show', () => widget?.show())
   load(widget, 'widget')
 }
@@ -121,7 +129,7 @@ export function createOverlays(): void {
       closable: false,
       skipTaskbar: true,
       show: false,
-      backgroundColor: '#0F1717',
+      backgroundColor: themeBackground(),
       webPreferences: { preload, sandbox: false }
     })
     win.setAlwaysOnTop(true, 'screen-saver')
@@ -142,6 +150,68 @@ export function closeOverlays(): void {
 
 export function hasOverlays(): boolean {
   return overlays.some((w) => !w.isDestroyed())
+}
+
+// ---------- toast notifications (app-styled, replaces native Notification) ----------
+
+let toast: BrowserWindow | null = null
+let toastTimer: NodeJS.Timeout | null = null
+let pendingToast: unknown = null
+
+const TOAST_W = 380
+const TOAST_H = 108
+const TOAST_MS = 6000
+
+export function showToast(payload: { title: string; body: string; kind: string }): void {
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => hideToast(), TOAST_MS)
+
+  if (toast && !toast.isDestroyed()) {
+    toast.webContents.send('toast:show', payload)
+    toast.showInactive()
+    return
+  }
+
+  const { workArea } = screen.getPrimaryDisplay()
+  pendingToast = payload
+  toast = new BrowserWindow({
+    width: TOAST_W,
+    height: TOAST_H,
+    x: workArea.x + workArea.width - TOAST_W - 16,
+    y: workArea.y + workArea.height - TOAST_H - 16,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    webPreferences: { preload, sandbox: false }
+  })
+  toast.setAlwaysOnTop(true, 'screen-saver')
+  toast.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  // The renderer pulls the payload via toast:getPending once React has mounted
+  // (pushing on did-finish-load races the listener registration).
+  toast.webContents.on('did-finish-load', () => {
+    if (toast && !toast.isDestroyed()) toast.showInactive()
+  })
+  load(toast, 'toast')
+}
+
+/** One-shot pull for the toast renderer after it mounts. */
+export function consumePendingToast(): unknown {
+  const p = pendingToast
+  pendingToast = null
+  return p
+}
+
+export function hideToast(): void {
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = null
+  pendingToast = null
+  if (toast && !toast.isDestroyed()) toast.destroy()
+  toast = null
 }
 
 // ---------- broadcast helpers ----------

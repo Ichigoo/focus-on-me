@@ -75,6 +75,28 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (task_id, day)
   );
   CREATE INDEX idx_task_completions_day ON task_completions(day);
+  `,
+  // v3 — task priorities/categories, subtasks, blocked apps, simple timer modes
+  `
+  ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium';
+  ALTER TABLE tasks ADD COLUMN project_id INTEGER REFERENCES projects(id);
+  CREATE TABLE subtasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX idx_subtasks_task ON subtasks(task_id);
+  CREATE TABLE blocked_apps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    exe TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL
+  );
+  ALTER TABLE methods ADD COLUMN kind TEXT NOT NULL DEFAULT 'standard';
   `
 ]
 
@@ -119,9 +141,21 @@ function seed(d: DatabaseSync): void {
   }
   const projCount = d.prepare('SELECT COUNT(*) AS n FROM projects').get() as { n: number }
   if (Number(projCount.n) === 0) {
-    d.prepare("INSERT INTO projects (name, color, created_at) VALUES ('General', '#37675C', ?)").run(
+    d.prepare("INSERT INTO projects (name, color, created_at) VALUES ('General', '#8B5CF6', ?)").run(
       Math.floor(Date.now() / 1000)
     )
+  }
+
+  // Hidden method rows backing the simple timer modes (sessions.method_id is NOT NULL).
+  // Insert-if-missing so existing databases get them after the v3 migration too.
+  for (const kind of ['countdown', 'stopwatch'] as const) {
+    const exists = d.prepare('SELECT id FROM methods WHERE kind = ?').get(kind)
+    if (!exists) {
+      d.prepare(
+        `INSERT INTO methods (name, focus_sec, short_pause_sec, long_pause_sec, rounds_before_long, is_preset, kind)
+         VALUES (?, 0, 0, 0, 1, 1, ?)`
+      ).run(kind === 'countdown' ? 'Countdown' : 'Stopwatch', kind)
+    }
   }
 }
 

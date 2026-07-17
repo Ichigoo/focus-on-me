@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Bell, MapPin, Search } from 'lucide-react'
+import { Bell, MapPin, MoonStar, Search, Sunrise } from 'lucide-react'
 import type { AdhanLocation, AdhanMadhab, AdhanMethodKey, AdhanTimes, PrayerName } from '@shared/types'
 import { computePrayerTimes, METHOD_LABELS, PRAYER_LABELS, PRAYER_ORDER } from '@shared/prayerTimes'
 import { fmtDuration, fmtTime } from '../lib/format'
 import { useSettings } from '../lib/hooks'
-import { Button, EmptyState, SectionCard, Toggle } from '../components/ui'
+import { Button, Card, EmptyState, SectionCard, Toggle } from '../components/ui'
 
 export default function Adhan(): React.JSX.Element {
   return (
-    <div className="mx-auto max-w-3xl px-8 py-10">
-      <h1 className="font-display mb-8 text-3xl">Adhan</h1>
+    <div className="mx-auto max-w-3xl px-8 py-8">
+      <h1 className="mb-1 text-3xl font-semibold tracking-tight">Adhan</h1>
+      <p className="mb-6 text-sm text-ink-muted">Prayer times for your location</p>
       <div className="flex flex-col gap-6">
-        <LocationSection />
         <TimesSection />
+        <LocationSection />
         <NotificationsSection />
       </div>
     </div>
@@ -189,7 +190,7 @@ function TimesSection(): React.JSX.Element {
   if (!location) {
     return (
       <SectionCard title="Today's times">
-        <EmptyState title="No location set" hint="Search for a city above to see prayer times." />
+        <EmptyState title="No location set" hint="Search for a city below to see prayer times." />
       </SectionCard>
     )
   }
@@ -199,35 +200,47 @@ function TimesSection(): React.JSX.Element {
   const countdownSec = Math.max(0, Math.round((next.at - Date.now()) / 1000))
 
   return (
-    <SectionCard title="Today's times">
-      <ul className="flex flex-col divide-y divide-line/60">
-        <li className="flex items-center justify-between gap-3 py-2.5">
-          <span className="text-sm text-ink-muted">Sunrise</span>
-          <span className="timer-digits text-sm text-ink">{fmtTime(times.sunrise / 1000)}</span>
-        </li>
+    <div>
+      {/* hero: next prayer */}
+      <Card className="mb-4 flex flex-col items-center gap-1 p-8 text-center">
+        <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-accent-soft text-accent">
+          <MoonStar size={20} aria-hidden="true" />
+        </div>
+        <p className="text-xs font-medium tracking-widest text-ink-muted uppercase">
+          {next.tomorrow ? 'Next · tomorrow' : 'Next prayer'}
+        </p>
+        <p className="text-3xl font-semibold tracking-tight">{PRAYER_LABELS[next.name]}</p>
+        <p className="timer-digits mt-1 text-xl text-accent">in {fmtDuration(countdownSec)}</p>
+        <p className="text-sm text-ink-muted">at {fmtTime(next.at / 1000)}</p>
+      </Card>
+
+      {/* today's times strip */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className="rounded-(--radius-card) border border-line bg-surface px-3 py-3 text-center">
+          <Sunrise size={14} className="mx-auto mb-1 text-ink-muted" aria-hidden="true" />
+          <p className="text-[11px] text-ink-muted">Sunrise</p>
+          <p className="timer-digits mt-0.5 text-sm text-ink">{fmtTime(times.sunrise / 1000)}</p>
+        </div>
         {PRAYER_ORDER.map((name) => {
           const isNext = !next.tomorrow && next.name === name
           return (
-            <li
+            <div
               key={name}
-              className={`-mx-2 flex items-center justify-between gap-3 rounded-(--radius-btn) px-2 py-2.5 ${
-                isNext ? 'bg-accent-soft' : ''
+              className={`rounded-(--radius-card) border px-3 py-3 text-center ${
+                isNext ? 'border-accent bg-accent-soft' : 'border-line bg-surface'
               }`}
             >
-              <span className={`text-sm ${isNext ? 'font-medium text-accent' : 'text-ink-muted'}`}>
+              <p className={`text-[11px] ${isNext ? 'font-medium text-accent' : 'text-ink-muted'}`}>
                 {PRAYER_LABELS[name]}
-              </span>
-              <span className={`timer-digits text-sm ${isNext ? 'font-medium text-accent' : 'text-ink'}`}>
+              </p>
+              <p className={`timer-digits mt-0.5 text-sm ${isNext ? 'font-medium text-accent' : 'text-ink'}`}>
                 {fmtTime(times[name] / 1000)}
-              </span>
-            </li>
+              </p>
+            </div>
           )
         })}
-      </ul>
-      <p className="mt-4 text-sm text-ink-muted">
-        {next.tomorrow ? 'Fajr tomorrow' : PRAYER_LABELS[next.name]} in {fmtDuration(countdownSec)}
-      </p>
-    </SectionCard>
+      </div>
+    </div>
   )
 }
 

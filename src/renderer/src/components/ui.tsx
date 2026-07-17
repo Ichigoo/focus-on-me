@@ -1,10 +1,11 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
-type ButtonVariant = 'primary' | 'ghost' | 'danger' | 'danger-ghost'
+type ButtonVariant = 'primary' | 'soft' | 'ghost' | 'danger' | 'danger-ghost'
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-accent-contrast hover:opacity-90 active:scale-[0.98] font-medium',
+    'btn-gradient text-accent-contrast hover:opacity-90 active:scale-[0.98] font-medium',
+  soft: 'bg-accent-soft text-accent hover:opacity-85 active:scale-[0.98] font-medium',
   ghost:
     'border border-line bg-surface text-ink hover:bg-surface-2 active:scale-[0.98]',
   danger: 'bg-danger text-white hover:opacity-90 active:scale-[0.98] font-medium',
@@ -40,13 +41,15 @@ export function SectionCard({ title, children }: { title: string; children: Reac
 
 export function Card({
   children,
-  className = ''
+  className = '',
+  style
 }: {
   children: ReactNode
   className?: string
+  style?: React.CSSProperties
 }): React.JSX.Element {
   return (
-    <div className={`card-shadow rounded-(--radius-card) border border-line bg-surface ${className}`}>
+    <div className={`card-shadow rounded-(--radius-card) border border-line bg-surface ${className}`} style={style}>
       {children}
     </div>
   )
@@ -83,14 +86,19 @@ export function Toggle({
 export function Segmented<T extends string>({
   options,
   value,
-  onChange
+  onChange,
+  grow = false
 }: {
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; count?: number }[]
   value: T
   onChange: (v: T) => void
+  grow?: boolean
 }): React.JSX.Element {
   return (
-    <div className="inline-flex rounded-(--radius-btn) border border-line bg-surface-2 p-0.5" role="tablist">
+    <div
+      className={`${grow ? 'flex w-full' : 'inline-flex'} rounded-xl border border-line bg-surface-2 p-1`}
+      role="tablist"
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -98,12 +106,134 @@ export function Segmented<T extends string>({
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={`cursor-pointer rounded-lg px-3 py-1.5 text-sm transition-colors duration-150 ${
-            value === o.value ? 'bg-surface text-ink card-shadow font-medium' : 'text-ink-muted hover:text-ink'
+            grow ? 'flex-1' : ''
+          } ${
+            value === o.value ? 'bg-accent-soft text-accent font-medium' : 'text-ink-muted hover:text-ink'
           }`}
         >
           {o.label}
+          {o.count !== undefined && <span className="ml-1 opacity-70">({o.count})</span>}
         </button>
       ))}
+    </div>
+  )
+}
+
+// ---------- FocusSphere primitives ----------
+
+export type ChipTone = 'accent' | 'success' | 'warning' | 'danger' | 'neutral'
+
+const chipToneClasses: Record<ChipTone, string> = {
+  accent: 'bg-accent-soft text-accent',
+  success: 'bg-success/15 text-success',
+  warning: 'bg-warning/15 text-warning',
+  danger: 'bg-danger/15 text-danger',
+  neutral: 'bg-surface-2 text-ink-muted'
+}
+
+export function Chip({
+  tone = 'neutral',
+  children,
+  className = '',
+  style
+}: {
+  tone?: ChipTone
+  children: ReactNode
+  className?: string
+  style?: React.CSSProperties
+}): React.JSX.Element {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${chipToneClasses[tone]} ${className}`}
+      style={style}
+    >
+      {children}
+    </span>
+  )
+}
+
+export function StatTile({
+  icon,
+  iconClassName = 'bg-accent-soft text-accent',
+  value,
+  label,
+  sub,
+  badge,
+  badgeTone = 'success'
+}: {
+  icon: ReactNode
+  iconClassName?: string
+  value: string
+  label: string
+  sub?: string
+  badge?: string
+  badgeTone?: ChipTone
+}): React.JSX.Element {
+  return (
+    <Card className="relative p-5">
+      {badge && (
+        <div className="absolute top-4 right-4">
+          <Chip tone={badgeTone}>{badge}</Chip>
+        </div>
+      )}
+      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-full ${iconClassName}`}>
+        {icon}
+      </div>
+      <p className="text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-0.5 text-xs text-ink-muted">{label}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-ink-muted/70">{sub}</p>}
+    </Card>
+  )
+}
+
+export function Stepper({
+  value,
+  display,
+  onDecrement,
+  onIncrement,
+  label
+}: {
+  value: number
+  display?: string
+  onDecrement: () => void
+  onIncrement: () => void
+  label: string
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-1" aria-label={label}>
+      <button
+        aria-label={`Decrease ${label}`}
+        onClick={onDecrement}
+        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-surface-2 text-ink-muted transition-colors hover:text-ink"
+      >
+        −
+      </button>
+      <span className="min-w-10 text-center font-mono text-sm">{display ?? value}</span>
+      <button
+        aria-label={`Increase ${label}`}
+        onClick={onIncrement}
+        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-surface-2 text-ink-muted transition-colors hover:text-ink"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+export function ProgressBar({
+  fraction,
+  className = ''
+}: {
+  fraction: number
+  className?: string
+}): React.JSX.Element {
+  const pct = Math.max(0, Math.min(1, fraction)) * 100
+  return (
+    <div className={`h-1 w-full overflow-hidden rounded-full bg-surface-2 ${className}`}>
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-300"
+        style={{ width: `${pct}%` }}
+      />
     </div>
   )
 }

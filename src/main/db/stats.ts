@@ -1,5 +1,13 @@
 import { getDb } from './index'
-import type { DailyFocus, HistoryEntry, ProjectTime, RangeFilter, StatsSummary } from '@shared/types'
+import type {
+  DailyFocus,
+  HistoryEntry,
+  ProjectTime,
+  RangeFilter,
+  StatsSummary,
+  StatsSummaryExtended,
+  StatsTrend
+} from '@shared/types'
 
 /** Epoch seconds for the start of the given range, in local time. */
 function rangeStart(range: RangeFilter): number {
@@ -62,6 +70,110 @@ export const stats = {
       sessionsCompleted: Number(completed.n),
       pausesSkipped: Number(skipped.n),
       currentStreak: streak
+    }
+  },
+
+  /**
+   * Summary plus derived metrics for the analytics screens.
+   *
+   * Productivity Score = 100 × (0.4·min(1, focusSec / 4h·days) +
+   * 0.3·sessionCompletionRate + 0.3·taskCompletionRate). Components with no
+   * data are excluded and the remaining weights renormalized; null when
+   * nothing at all happened in the range.
+   */
+  summaryExtended(range: RangeFilter): StatsSummaryExtended {
+    const db = getDb()
+    const base = this.summary(range)
+    const start = rangeStart(range)
+
+    const sessionRow = db
+      .prepare(
+        "SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS done FROM sessions WHERE status != 'active' AND started_at >= ?"
+      )
+      .get(start) as { total: number; done: number | null }
+    const totalSessions = Number(sessionRow.total)
+    const avgSessionSec = totalSessions > 0 ? Math.round(base.totalFocusSec / totalSessions) : 0
+
+    // Best streak: longest consecutive-day run across all focus days.
+    const dayRows = db
+      .prepare(
+        "SELECT DISTINCT started_at FROM intervals WHERE kind = 'focus' AND actual_sec > 0 ORDER BY started_at"
+      )
+      .all() as unknown as { started_at: number }[]
+    const sortedDays = [...new Set(dayRows.map((r) => localDayString(Number(r.started_at))))].sort()
+    let bestStreak = 0
+    let run = 0
+    let prev: string | null = null
+    for (const day of sortedDays) {
+      if (prev) {
+        const next = new Date(`${prev}T00:00:00`)
+        next.setDate(next.getDate() + 1)
+        run = localDayString(Math.floor(next.getTime() / 1000)) === day ? run + 1 : 1
+      } else {
+        run = 1
+      }
+      bestStreak = Math.max(bestStreak, run)
+      prev = day
+    }
+
+    // Task completion within the range (by completion day).
+    const startDay = localDayString(start === 0 ? 0 : start)
+    const taskRow = db
+      .prepare(
+        "SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done FROM task_completions WHERE day >= ?"
+      )
+      .get(start === 0 ? '0000-00-00' : startDay) as { total: number; done: number | null }
+    const tasksScheduled = Number(taskRow.total)
+    const tasksDone = Number(taskRow.done ?? 0)
+
+    // Productivity score
+    const daysInRange =
+      range === 'today' ? 1 : range === 'week' ? 7 : range === 'month' ? new Date().getDate() : sortedDays.length || 1
+    const parts: { weight: number; value: number }[] = []
+    if (base.totalFocusSec > 0 || totalSessions > 0) {
+      parts.push({ weight: 0.4, value: Math.min(1, base.totalFocusSec / (4 * 3600 * daysInRange)) })
+    }
+    if (totalSessions > 0) {
+      parts.push({ weight: 0.3, value: Number(sessionRow.done ?? 0) / totalSessions })
+    }
+    if (tasksScheduled > 0) {
+      parts.push({ weight: 0.3, value: tasksDone / tasksScheduled })
+    }
+    const totalWeight = parts.reduce((s, p) => s + p.weight, 0)
+    const productivityScore =
+      totalWeight > 0
+        ? Math.round((parts.reduce((s, p) => s + p.weight * p.value, 0) / totalWeight) * 100)
+        : null
+
+    return { ...base, avgSessionSec, bestStreak, productivityScore, tasksDone, tasksScheduled }
+  },
+
+  /** Focus/session totals for the range vs the immediately preceding equal-length period. */
+  trend(range: RangeFilter): StatsTrend {
+    const db = getDb()
+    const start = rangeStart(range)
+    const nowSec = Math.floor(Date.now() / 1000)
+    const prevStart = range === 'all' ? 0 : start - Math.max(1, nowSec - start)
+
+    function window(from: number, to: number): { focus: number; sessions: number } {
+      const f = db
+        .prepare(
+          "SELECT COALESCE(SUM(actual_sec), 0) AS s FROM intervals WHERE kind = 'focus' AND started_at >= ? AND started_at < ?"
+        )
+        .get(from, to) as { s: number }
+      const c = db
+        .prepare("SELECT COUNT(*) AS n FROM sessions WHERE status != 'active' AND started_at >= ? AND started_at < ?")
+        .get(from, to) as { n: number }
+      return { focus: Number(f.s), sessions: Number(c.n) }
+    }
+
+    const current = window(start, nowSec + 1)
+    const previous = range === 'all' ? { focus: 0, sessions: 0 } : window(prevStart, start)
+    return {
+      focusSecCurrent: current.focus,
+      focusSecPrevious: previous.focus,
+      sessionsCurrent: current.sessions,
+      sessionsPrevious: previous.sessions
     }
   },
 

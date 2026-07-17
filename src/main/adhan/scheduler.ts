@@ -1,7 +1,6 @@
-import { Notification } from 'electron'
 import { computePrayerTimes, PRAYER_LABELS, PRAYER_ORDER } from '@shared/prayerTimes'
 import { settings } from '../db/repos'
-import { broadcast } from '../windows'
+import { broadcast, showToast } from '../windows'
 
 let timers: NodeJS.Timeout[] = []
 
@@ -11,9 +10,7 @@ function clearAll(): void {
 }
 
 function fireAdhan(label: string, playSound: boolean): void {
-  if (Notification.isSupported()) {
-    new Notification({ title: 'Adhan', body: `${label} — time to pray` }).show()
-  }
+  showToast({ title: 'Adhan', body: `${label} — time to pray`, kind: 'adhan' })
   if (playSound) broadcast('sound:play', 'adhan')
 }
 

@@ -26,7 +26,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           widget: resolve(__dirname, 'src/renderer/widget.html'),
-          overlay: resolve(__dirname, 'src/renderer/overlay.html')
+          overlay: resolve(__dirname, 'src/renderer/overlay.html'),
+          toast: resolve(__dirname, 'src/renderer/toast.html')
         }
       }
     }

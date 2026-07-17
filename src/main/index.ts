@@ -6,6 +6,7 @@ import { registerIpc } from './ipc'
 import { createTray, setTrayTooltip } from './tray'
 import { rescheduleAdhan } from './adhan/scheduler'
 import { rescheduleTasks } from './tasks/scheduler'
+import { pauseBlocking, startBlocking, stopBlocking } from './blocker/watcher'
 import {
   broadcast,
   closeOverlays,
@@ -15,6 +16,7 @@ import {
   createWidget,
   getMainWindow,
   hasOverlays,
+  hideToast,
   showMainWindow
 } from './windows'
 import type { TimerState } from '@shared/types'
@@ -27,12 +29,16 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     openDb()
+
+    // apply persisted theme before any window is created
+    const prefs = settings.getAll()
+    nativeTheme.themeSource = prefs.themePreference
+
     registerIpc()
     createTray()
     createMainWindow()
 
     // apply persisted launch-on-startup preference
-    const prefs = settings.getAll()
     app.setLoginItemSettings({ openAtLogin: prefs.launchOnStartup })
 
     // ----- adhan -----
@@ -68,17 +74,21 @@ if (!gotLock) {
     engine.on('session-started', () => {
       getMainWindow()?.hide()
       if (settings.getAll().widgetEnabled) createWidget()
+      if (settings.getAll().appBlockingEnabled) startBlocking()
     })
 
     engine.on('phase', (phase: string) => {
       if (phase === 'focus') {
         closeOverlays()
+        if (settings.getAll().appBlockingEnabled) startBlocking()
       } else {
         createOverlays()
+        pauseBlocking() // restrictions lift during breaks
       }
     })
 
     engine.on('session-ended', () => {
+      stopBlocking()
       closeOverlays()
       closeWidget()
       showMainWindow()
@@ -108,6 +118,8 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    stopBlocking()
+    hideToast()
     engine.stop()
   })
 }

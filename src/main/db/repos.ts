@@ -58,12 +58,40 @@ export const projects = {
 
 export const methods = {
   list(): Method[] {
+    // Hidden rows backing countdown/stopwatch modes never appear in pickers.
     return getDb()
-      .prepare('SELECT * FROM methods ORDER BY is_preset DESC, name COLLATE NOCASE')
+      .prepare("SELECT * FROM methods WHERE kind = 'standard' ORDER BY is_preset DESC, name COLLATE NOCASE")
       .all() as unknown as Method[]
   },
   get(id: number): Method | undefined {
     return getDb().prepare('SELECT * FROM methods WHERE id = ?').get(id) as unknown as Method | undefined
+  },
+  getByKind(kind: 'countdown' | 'stopwatch'): Method | undefined {
+    return getDb().prepare('SELECT * FROM methods WHERE kind = ?').get(kind) as unknown as Method | undefined
+  },
+  /**
+   * Reuse any method (visible or auto) with these exact durations, otherwise
+   * create a hidden `kind='auto'` row so Focus-page steppers never clutter the
+   * methods list in Settings.
+   */
+  findOrCreateAuto(focusSec: number, shortSec: number, longSec: number, rounds: number): Method {
+    const existing = getDb()
+      .prepare(
+        `SELECT * FROM methods
+         WHERE focus_sec = ? AND short_pause_sec = ? AND long_pause_sec = ? AND rounds_before_long = ?
+           AND kind IN ('standard', 'auto')
+         LIMIT 1`
+      )
+      .get(focusSec, shortSec, longSec, rounds) as unknown as Method | undefined
+    if (existing) return existing
+    const name = `${Math.round(focusSec / 60)}/${Math.round(shortSec / 60)}/${Math.round(longSec / 60)} × ${rounds}`
+    const res = getDb()
+      .prepare(
+        `INSERT INTO methods (name, focus_sec, short_pause_sec, long_pause_sec, rounds_before_long, is_preset, kind)
+         VALUES (?, ?, ?, ?, ?, 0, 'auto')`
+      )
+      .run(name, focusSec, shortSec, longSec, rounds)
+    return this.get(Number(res.lastInsertRowid))!
   },
   create(m: Omit<Method, 'id' | 'is_preset'>): Method {
     const res = getDb()

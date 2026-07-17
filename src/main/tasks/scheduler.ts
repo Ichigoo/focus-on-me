@@ -1,8 +1,7 @@
-import { Notification } from 'electron'
 import { settings } from '../db/repos'
 import { tasksRepo } from '../db/tasks'
 import { localDayString } from '../db/stats'
-import { broadcast } from '../windows'
+import { broadcast, showToast } from '../windows'
 
 let timers: NodeJS.Timeout[] = []
 
@@ -14,9 +13,7 @@ function clearAll(): void {
 function fireTask(id: number, day: string): void {
   const task = tasksRepo.listForDay(day).find((t) => t.id === id)
   if (!task || task.status !== 'pending') return
-  if (Notification.isSupported()) {
-    new Notification({ title: 'Task reminder', body: task.name }).show()
-  }
+  showToast({ title: 'Task reminder', body: task.name, kind: 'task' })
   if (settings.getAll().soundTaskReminder) broadcast('sound:play', 'task-reminder')
 }
 
@@ -44,6 +41,7 @@ export function rescheduleTasks(): void {
   midnight.setHours(24, 0, 5, 0)
   timers.push(
     setTimeout(() => {
+      tasksRepo.resetRecurringSubtasks()
       broadcast('tasks:changed')
       rescheduleTasks()
     }, midnight.getTime() - now)

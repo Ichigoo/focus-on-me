@@ -1,8 +1,36 @@
 import { getDb } from './index'
 import { localDayString } from './stats'
-import type { Task, TaskDayStatus, TaskInput, TaskWithStatus } from '@shared/types'
+import type { Subtask, Task, TaskDayStatus, TaskInput, TaskWithStatus } from '@shared/types'
 
 const now = (): number => Math.floor(Date.now() / 1000)
+
+/** Project name/color + subtasks for a set of tasks, keyed by task id. */
+function decorate(tasks: Task[]): Map<number, Pick<TaskWithStatus, 'projectName' | 'projectColor' | 'subtasks'>> {
+  const map = new Map<number, Pick<TaskWithStatus, 'projectName' | 'projectColor' | 'subtasks'>>()
+  if (tasks.length === 0) return map
+  const ids = tasks.map((t) => t.id)
+  const placeholders = ids.map(() => '?').join(',')
+  const subs = getDb()
+    .prepare(`SELECT * FROM subtasks WHERE task_id IN (${placeholders}) ORDER BY sort_order, id`)
+    .all(...ids) as unknown as Subtask[]
+  const projRows = getDb()
+    .prepare(
+      `SELECT t.id AS taskId, p.name AS projectName, p.color AS projectColor
+       FROM tasks t JOIN projects p ON p.id = t.project_id
+       WHERE t.id IN (${placeholders})`
+    )
+    .all(...ids) as unknown as { taskId: number; projectName: string; projectColor: string }[]
+  const projByTask = new Map(projRows.map((r) => [Number(r.taskId), r]))
+  for (const t of tasks) {
+    const proj = projByTask.get(t.id)
+    map.set(t.id, {
+      projectName: proj?.projectName ?? null,
+      projectColor: proj?.projectColor ?? null,
+      subtasks: subs.filter((s) => Number(s.task_id) === t.id)
+    })
+  }
+  return map
+}
 
 function validateInput(input: TaskInput): void {
   if (input.schedule_kind === 'weekly' && input.weekdays === 0) {
@@ -66,12 +94,19 @@ export const tasksRepo = {
     const allTasks = getDb()
       .prepare('SELECT * FROM tasks WHERE archived = 0 ORDER BY name COLLATE NOCASE')
       .all() as unknown as Task[]
+    const extras = decorate(allTasks)
     return allTasks.map((task) => {
       const completionDay = task.schedule_kind === 'once' && task.once_date ? task.once_date : today
       const completion = getCompletion(task.id, completionDay)
       const status: TaskDayStatus | 'pending' = completion ? completion.status : 'pending'
       const overdue = task.schedule_kind === 'once' && !!task.once_date && task.once_date < today && status === 'pending'
-      return { ...task, status, streak: computeStreak(task, today), overdue: overdue || undefined }
+      return {
+        ...task,
+        status,
+        streak: computeStreak(task, today),
+        overdue: overdue || undefined,
+        ...extras.get(task.id)!
+      }
     })
   },
 
@@ -84,10 +119,20 @@ export const tasksRepo = {
     const day = localDayString(now())
     const res = getDb()
       .prepare(
-        `INSERT INTO tasks (name, schedule_kind, weekdays, once_date, time_hhmm, created_at, created_day)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO tasks (name, schedule_kind, weekdays, once_date, time_hhmm, priority, project_id, created_at, created_day)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(input.name.trim(), input.schedule_kind, input.weekdays, input.once_date, input.time_hhmm, now(), day)
+      .run(
+        input.name.trim(),
+        input.schedule_kind,
+        input.weekdays,
+        input.once_date,
+        input.time_hhmm,
+        input.priority ?? 'medium',
+        input.project_id ?? null,
+        now(),
+        day
+      )
     return this.get(Number(res.lastInsertRowid))!
   },
 
@@ -95,9 +140,18 @@ export const tasksRepo = {
     validateInput(input)
     getDb()
       .prepare(
-        `UPDATE tasks SET name = ?, schedule_kind = ?, weekdays = ?, once_date = ?, time_hhmm = ? WHERE id = ?`
+        `UPDATE tasks SET name = ?, schedule_kind = ?, weekdays = ?, once_date = ?, time_hhmm = ?, priority = ?, project_id = ? WHERE id = ?`
       )
-      .run(input.name.trim(), input.schedule_kind, input.weekdays, input.once_date, input.time_hhmm, id)
+      .run(
+        input.name.trim(),
+        input.schedule_kind,
+        input.weekdays,
+        input.once_date,
+        input.time_hhmm,
+        input.priority ?? 'medium',
+        input.project_id ?? null,
+        id
+      )
   },
 
   remove(id: number): void {
@@ -135,8 +189,18 @@ export const tasksRepo = {
       const completion = getCompletion(task.id, completionDay)
       const status: TaskDayStatus | 'pending' = completion ? completion.status : 'pending'
       const streak = computeStreak(task, day)
-      results.push({ ...task, status, streak, overdue: overdue || undefined })
+      results.push({
+        ...task,
+        status,
+        streak,
+        overdue: overdue || undefined,
+        projectName: null,
+        projectColor: null,
+        subtasks: []
+      })
     }
+    const extras = decorate(results)
+    for (const r of results) Object.assign(r, extras.get(r.id))
 
     results.sort((a, b) => {
       if (a.time_hhmm && b.time_hhmm) return a.time_hhmm.localeCompare(b.time_hhmm)
@@ -163,5 +227,34 @@ export const tasksRepo = {
       }
     }
     return this.listForDay(day)
+  },
+
+  // ---------- subtasks ----------
+
+  addSubtask(taskId: number, name: string): Subtask {
+    const order = getDb()
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS o FROM subtasks WHERE task_id = ?')
+      .get(taskId) as { o: number }
+    const res = getDb()
+      .prepare('INSERT INTO subtasks (task_id, name, done, sort_order, created_at) VALUES (?, ?, 0, ?, ?)')
+      .run(taskId, name.trim(), Number(order.o), now())
+    return getDb()
+      .prepare('SELECT * FROM subtasks WHERE id = ?')
+      .get(Number(res.lastInsertRowid)) as unknown as Subtask
+  },
+
+  toggleSubtask(id: number, done: boolean): void {
+    getDb().prepare('UPDATE subtasks SET done = ? WHERE id = ?').run(done ? 1 : 0, id)
+  },
+
+  removeSubtask(id: number): void {
+    getDb().prepare('DELETE FROM subtasks WHERE id = ?').run(id)
+  },
+
+  /** Reset subtask checkmarks of recurring tasks (called at midnight rollover). */
+  resetRecurringSubtasks(): void {
+    getDb().exec(
+      "UPDATE subtasks SET done = 0 WHERE task_id IN (SELECT id FROM tasks WHERE schedule_kind != 'once')"
+    )
   }
 }

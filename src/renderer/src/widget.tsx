@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Coffee, Maximize2, Pause, Play } from 'lucide-react'
-import { useTheme, useTimerState } from './lib/hooks'
+import { useSettings, useTheme, useTimerState } from './lib/hooks'
 import { fmtClock, phaseLabel } from './lib/format'
 import { TimerRing } from './components/TimerRing'
 import './styles/theme.css'
@@ -9,14 +9,17 @@ import './styles/theme.css'
 function WidgetApp(): React.JSX.Element {
   useTheme()
   const timer = useTimerState()
+  const [prefs] = useSettings()
   const isFocus = timer.phase === 'focus'
+  const isStopwatch = timer.mode === 'stopwatch'
   const color = isFocus ? 'var(--accent)' : 'var(--pause)'
-  const progress = timer.plannedSec > 0 ? 1 - timer.remainingSec / timer.plannedSec : 0
+  const progress = isStopwatch ? 0 : timer.plannedSec > 0 ? 1 - timer.remainingSec / timer.plannedSec : 0
+  const opacity = Math.min(1, Math.max(0.4, prefs?.widgetOpacity ?? 1))
 
   return (
     <div
       className="card-shadow flex h-[68px] w-[252px] items-center gap-3 rounded-full border border-line bg-surface px-3 select-none m-1"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      style={{ WebkitAppRegion: 'drag', opacity } as React.CSSProperties}
     >
       <TimerRing progress={progress} size={46} stroke={4} color={color}>
         <span className="h-2 w-2 rounded-full" style={{ background: timer.projectColor }} aria-hidden="true" />
@@ -25,8 +28,9 @@ function WidgetApp(): React.JSX.Element {
       <div className="min-w-0 flex-1">
         <p className="timer-digits text-[26px] leading-none text-ink">{fmtClock(timer.remainingSec)}</p>
         <p className="mt-0.5 truncate text-[11px] text-ink-muted">
-          {timer.status === 'paused' ? 'Paused · ' : `${phaseLabel(timer.phase)} · `}
-          {timer.projectName} · {timer.round}/{timer.roundsBeforeLong}
+          {timer.status === 'paused' ? 'Paused · ' : isStopwatch ? 'Elapsed · ' : `${phaseLabel(timer.phase)} · `}
+          {timer.projectName}
+          {timer.mode === 'pomodoro' ? ` · ${timer.round}/${timer.roundsBeforeLong}` : ''}
         </p>
       </div>
 
